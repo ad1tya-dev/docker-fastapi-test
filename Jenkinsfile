@@ -1,30 +1,31 @@
 pipeline {
     agent any
-
+    
     environment {
         DOCKER_IMAGE = 'fastapi-app'
         APP_PORT = '8000'
     }
-
+    
     stages {
         stage('Cleanup') {
             steps {
                 echo 'Cleaning up old containers and images...'
                 script {
                     sh '''
-                    docker stop fastapi-app || true
-                    docker rm fastapi-app || true
+                        docker stop fastapi-app || true
+                        docker rm fastapi-app || true
                     '''
                 }
             }
         }
-
+        
         stage('Checkout') {
             steps {
-                echo 'Code already checked out by Jenkins'
+                echo 'Checking out code from Git...'
+                checkout scm
             }
         }
-
+        
         stage('Build Docker Image') {
             steps {
                 script {
@@ -34,22 +35,22 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Deploy Application') {
             steps {
                 script {
                     echo 'Deploying application...'
                     sh '''
-                    docker run -d \
-                    --name fastapi-app \
-                    -p 8000:8000 \
-                    -v $(pwd)/app/data:/app/app/data \
-                    fastapi-app:latest
+                        docker run -d \
+                          --name fastapi-app \
+                          -p 8000:8000 \
+                          -v $(pwd)/app/data:/app/app/data \
+                          fastapi-app:latest
                     '''
                 }
             }
         }
-
+        
         stage('Health Check') {
             steps {
                 script {
@@ -59,7 +60,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Verify Data Persistence') {
             steps {
                 script {
@@ -69,7 +70,7 @@ pipeline {
             }
         }
     }
-
+    
     post {
         success {
             echo '✅ Deployment successful!'
