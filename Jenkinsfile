@@ -1,23 +1,3 @@
-Good news and bad news!
-Good news:
-
-✅ Docker image built successfully!
-✅ Container deployed successfully!
-✅ FastAPI app is actually running (you can see "Uvicorn running on http://0.0.0.0:8000")
-
-Bad news:
-
-❌ Health check failed because it's checking localhost from inside Jenkins container, not the FastAPI container
-
-The Problem:
-Jenkins is trying to curl http://localhost:8000 from inside the Jenkins container, but the FastAPI app is running in a different container. They can't communicate via localhost.
-
-Solution: Fix the Jenkinsfile
-We need to update the health check to use the container name instead of localhost.
-In Git Bash:
-bashcd ~/Desktop/dock\ ass/demoofgit/docker-fastapi-test
-Create the updated Jenkinsfile:
-bashcat > Jenkinsfile << 'EOF'
 pipeline {
     agent any
     
