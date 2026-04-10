@@ -1,35 +1,28 @@
-from typing import List
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.schema import UserCreateSchema
+from app.services import get_users, create_user
 
-from app import services
-from app.schema import UserIn, BaseResponse, UserListOut
+app = FastAPI(title="FastAPI Docker Test")
 
-app = FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
-async def index():
-    """
-    Index route for our application
-    """
-    return {"message": "Hello from FastAPI ;)"}
+def index():
+    return {"message": "Hello from FastAPI - Deployed by Jenkins! 🚀"}
 
+@app.get("/users")
+def read_users():
+    users = get_users()
+    return {"data": users}
 
-@app.post("/users", response_model=BaseResponse)
-async def user_create(user: UserIn):
-    """
-    Add user data to json file
-    """
-    try:
-        services.add_userdata(user.dict())
-    except:
-        return {"success": False}
+@app.post("/users")
+def add_user(user: UserCreateSchema):
+    create_user(user.dict())
     return {"success": True}
-
-
-@app.get("/users", response_model=UserListOut)
-async def get_users():
-    """
-    Read user data from json file
-    """
-    return services.read_usersdata()
