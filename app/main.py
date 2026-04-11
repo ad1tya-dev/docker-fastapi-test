@@ -1,63 +1,85 @@
 from fastapi import FastAPI
-from typing import List, Optional
-from pydantic import BaseModel
-import json
-import os
+from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+import time
+from app.schema import UserCreateSchema
+from app.services import get_users, create_user
 
-app = FastAPI(title="FastAPI Docker Demo")
+app = FastAPI(title="FastAPI Docker Test with Monitoring")
 
-# Data file path
-DATA_FILE = "app/data/users.json"
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-class User(BaseModel):
-    id: int
-    name: str
-    email: str
+# Prometheus Metrics
+REQUEST_COUNT = Counter(
+    'fastapi_requests_total',
+    'Total number of requests',
+    ['method', 'endpoint', 'status']
+)
 
-def load_users() -> List[User]:
-    """Load users from JSON file"""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            data = json.load(f)
-            return [User(**user) for user in data]
-    return []
+REQUEST_DURATION = Histogram(
+    'fastapi_request_duration_seconds',
+    'Request duration in seconds',
+    ['method', 'endpoint']
+)
 
-def save_users(users: List[User]):
-    """Save users to JSON file"""
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, 'w') as f:
-        json.dump([user.dict() for user in users], f, indent=2)
+USERS_COUNT = Gauge(
+    'fastapi_users_total',
+    'Total number of users in the system'
+)
+
+# Middleware to track metrics
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    duration = time.time() - start_time
+    
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status=response.status_code
+    ).inc()
+    
+    REQUEST_DURATION.labels(
+        method=request.method,
+        endpoint=request.url.path
+    ).observe(duration)
+    
+    return response
 
 @app.get("/")
-def read_root():
-    return {
-        "message": "FastAPI Docker Demo",
-        "status": "running",
-        "endpoints": ["/users", "/users/{user_id}"]
-    }
+def index():
+    return {"message": "Hello from FastAPI with Prometheus Monitoring! 📊"}
 
-@app.get("/users", response_model=List[User])
-def get_users():
-    """Get all users"""
-    return load_users()
+@app.get("/users")
+def read_users():
+    users = get_users()
+    USERS_COUNT.set(len(users))
+    return {"data": users}
 
-@app.get("/users/{user_id}", response_model=User)
-def get_user(user_id: int):
-    """Get a specific user"""
-    users = load_users()
-    for user in users:
-        if user.id == user_id:
-            return user
-    return {"error": "User not found"}
+@app.post("/users")
+def add_user(user: UserCreateSchema):
+    create_user(user.dict())
+    users = get_users()
+    USERS_COUNT.set(len(users))
+    return {"success": True}
 
-@app.post("/users", response_model=User)
-def create_user(user: User):
-    """Create a new user"""
-    users = load_users()
-    users.append(user)
-    save_users(users)
-    return user
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/health")
-def health_check():
+def health():
+    """Health check endpoint"""
     return {"status": "healthy"}
